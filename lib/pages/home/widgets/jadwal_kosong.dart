@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 class JadwalKosong extends StatelessWidget {
   final String dayName;
   final VoidCallback onAdd;
+  final bool showOfflineMessage;
 
-  const JadwalKosong({super.key, required this.dayName, required this.onAdd});
+  const JadwalKosong({
+    super.key,
+    required this.dayName,
+    required this.onAdd,
+    this.showOfflineMessage = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +33,10 @@ class JadwalKosong extends StatelessWidget {
             const SizedBox(height: 8),
 
             Text(
-              'Belum ada jadwal untuk $dayName.',
+              showOfflineMessage
+                  ? 'Kamu sedang offline dan belum memiliki jadwal '
+                        'tersimpan di perangkat ini.'
+                  : 'Belum ada jadwal untuk $dayName.',
               textAlign: TextAlign.center,
             ),
 

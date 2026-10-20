@@ -11,6 +11,7 @@ class ListJadwal extends StatelessWidget {
   final VoidCallback onAdd;
   final ValueChanged<JadwalDenganMataKuliah> onEdit;
   final ValueChanged<JadwalDenganMataKuliah> onDelete;
+  final bool showOfflineEmptyState;
 
   const ListJadwal({
     super.key,
@@ -19,6 +20,7 @@ class ListJadwal extends StatelessWidget {
     required this.onAdd,
     required this.onEdit,
     required this.onDelete,
+    this.showOfflineEmptyState = false,
   });
 
   @override
@@ -56,6 +58,7 @@ class ListJadwal extends StatelessWidget {
           return JadwalKosong(
             dayName: DayHelper.dayNames[selectedDay] ?? '-',
             onAdd: onAdd,
+            showOfflineMessage: showOfflineEmptyState && allSchedules.isEmpty,
           );
         }
 

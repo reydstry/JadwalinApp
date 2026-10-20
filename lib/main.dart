@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'database/database.dart';
+import 'pages/auth/auth_flow.dart';
 import 'pages/home/home.dart';
 import 'pages/splash/splash_page.dart';
 import 'services/app_bootstrapper.dart';
+import 'services/auth_gateway.dart';
 import 'services/notification_service.dart';
 
 import 'theme/app_colors.dart';
@@ -20,8 +22,14 @@ Future<void> main() async {
 class MyApp extends StatefulWidget {
   final AppDatabase database;
   final AppBootstrapper? bootstrapper;
+  final AuthGateway? authGateway;
 
-  const MyApp({super.key, required this.database, this.bootstrapper});
+  const MyApp({
+    super.key,
+    required this.database,
+    this.bootstrapper,
+    this.authGateway,
+  });
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -29,14 +37,20 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   late final AppBootstrapper _bootstrapper;
+  late final AuthGateway _authGateway;
 
   @override
   void initState() {
     super.initState();
+    _authGateway = widget.authGateway ?? const SimulatedAuthGateway();
     _bootstrapper =
         widget.bootstrapper ??
         DefaultAppBootstrapper(
           database: widget.database,
+          // Sesi persisten akan disambungkan bersama backend.
+          hasStoredSession: () async => false,
+          // Diganti dengan status koneksi pada milestone integrasi API.
+          isOffline: () async => false,
           initializeNotifications: () async {
             if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
               await NotificationService.initialize();
@@ -66,7 +80,20 @@ class _MyAppState extends State<MyApp> {
       ),
       home: SplashPage(
         load: _bootstrapper.load,
-        destinationBuilder: (_) => HomePage(database: widget.database),
+        destinationBuilder: (context, result) {
+          Widget buildHome(BuildContext context) => HomePage(
+            database: widget.database,
+            showOfflineEmptyState: result.showOfflineEmptyState,
+          );
+
+          return switch (result.destination) {
+            AppLaunchDestination.login => AuthFlow(
+              authGateway: _authGateway,
+              homeBuilder: buildHome,
+            ),
+            AppLaunchDestination.home => buildHome(context),
+          };
+        },
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jadwalin/pages/splash/splash_page.dart';
+import 'package:jadwalin/services/app_bootstrapper.dart';
 
 void main() {
   testWidgets('menampilkan progres nyata lalu membuka tujuan satu kali', (
@@ -17,9 +18,15 @@ void main() {
         home: SplashPage(
           load: (onProgress) {
             laporkanProgres = onProgress;
-            return selesaiMemuat.future;
+            return selesaiMemuat.future.then(
+              (_) => const AppBootstrapResult(
+                destination: AppLaunchDestination.home,
+                isOffline: false,
+                hasLocalData: true,
+              ),
+            );
           },
-          destinationBuilder: (_) {
+          destinationBuilder: (_, _) {
             jumlahPembuatanTujuan++;
             return const Scaffold(body: Text('Beranda tujuan'));
           },
@@ -37,6 +44,108 @@ void main() {
     expect(find.text('Beranda tujuan'), findsNothing);
 
     selesaiMemuat.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Beranda tujuan'), findsOneWidget);
+    expect(jumlahPembuatanTujuan, 1);
+  });
+
+  testWidgets('meneruskan kondisi offline tanpa data ke halaman tujuan', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SplashPage(
+          load: (_) async => AppBootstrapResult.resolve(
+            hasStoredSession: true,
+            isOffline: true,
+            hasLocalData: false,
+          ),
+          destinationBuilder: (_, result) {
+            return Scaffold(
+              body: Text(
+                result.showOfflineEmptyState
+                    ? 'Belum ada data lokal. Kamu sedang offline.'
+                    : 'Home',
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Belum ada data lokal. Kamu sedang offline.'), findsOne);
+  });
+
+  test('tanpa sesi tersimpan menghasilkan tujuan login', () {
+    final result = AppBootstrapResult.resolve(
+      hasStoredSession: false,
+      isOffline: true,
+      hasLocalData: true,
+    );
+
+    expect(result.destination, AppLaunchDestination.login);
+  });
+
+  test('data lokal mencegah empty state offline', () {
+    final result = AppBootstrapResult.resolve(
+      hasStoredSession: true,
+      isOffline: true,
+      hasLocalData: true,
+    );
+
+    expect(result.destination, AppLaunchDestination.home);
+    expect(result.showOfflineEmptyState, isFalse);
+  });
+
+  testWidgets('kegagalan dapat dicoba lagi tanpa proses ganda', (tester) async {
+    final percobaanKedua = Completer<AppBootstrapResult>();
+    var jumlahPercobaan = 0;
+    var jumlahPembuatanTujuan = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SplashPage(
+          load: (_) {
+            jumlahPercobaan++;
+
+            if (jumlahPercobaan == 1) {
+              return Future.error(Exception('Database tidak tersedia'));
+            }
+
+            return percobaanKedua.future;
+          },
+          destinationBuilder: (_, _) {
+            jumlahPembuatanTujuan++;
+            return const Scaffold(body: Text('Beranda tujuan'));
+          },
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Aplikasi belum siap'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Coba lagi'), findsOneWidget);
+    expect(find.text('Beranda tujuan'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Coba lagi'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Coba lagi'));
+    await tester.pump();
+
+    expect(jumlahPercobaan, 2);
+    expect(find.text('Beranda tujuan'), findsNothing);
+
+    percobaanKedua.complete(
+      const AppBootstrapResult(
+        destination: AppLaunchDestination.home,
+        isOffline: false,
+        hasLocalData: true,
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Beranda tujuan'), findsOneWidget);

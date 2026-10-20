@@ -15,8 +15,13 @@ import '../../theme/app_colors.dart';
 
 class HomePage extends StatefulWidget {
   final AppDatabase database;
+  final bool showOfflineEmptyState;
 
-  const HomePage({super.key, required this.database});
+  const HomePage({
+    super.key,
+    required this.database,
+    this.showOfflineEmptyState = false,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -163,7 +168,8 @@ class _HomePageState extends State<HomePage> {
             fontWeight: FontWeight.w900,
             fontSize: 24,
             fontFamily: 'Poppins',
-            color: AppColors.primary,), 
+            color: AppColors.primary,
+          ),
         ),
 
         actions: [
@@ -182,13 +188,12 @@ class _HomePageState extends State<HomePage> {
 
           const SizedBox(width: 12),
         ],
-        ),
+      ),
 
       // KONTEN
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           // Navigasi hari yang sudah ada
           PilihHari(selectedDay: _hariDipilih, onDaySelected: _pilihHari),
 
@@ -214,6 +219,7 @@ class _HomePageState extends State<HomePage> {
               onAdd: _bukaTambahJadwal,
               onEdit: _bukaEditJadwal,
               onDelete: _hapusJadwal,
+              showOfflineEmptyState: widget.showOfflineEmptyState,
             ),
           ),
         ],

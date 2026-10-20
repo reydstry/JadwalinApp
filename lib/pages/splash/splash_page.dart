@@ -5,8 +5,12 @@ import 'package:flutter/material.dart';
 import '../../services/app_bootstrapper.dart';
 import '../../theme/app_colors.dart';
 
-typedef SplashLoader = Future<void> Function(
+typedef SplashLoader = Future<AppBootstrapResult> Function(
   BootstrapProgressCallback onProgress,
+);
+typedef SplashDestinationBuilder = Widget Function(
+  BuildContext context,
+  AppBootstrapResult result,
 );
 
 class SplashPage extends StatefulWidget {
@@ -17,7 +21,7 @@ class SplashPage extends StatefulWidget {
   });
 
   final SplashLoader load;
-  final WidgetBuilder destinationBuilder;
+  final SplashDestinationBuilder destinationBuilder;
 
   @override
   State<SplashPage> createState() => _SplashPageState();
@@ -26,40 +30,66 @@ class SplashPage extends StatefulWidget {
 class _SplashPageState extends State<SplashPage> {
   double _progress = 0;
   bool _hasNavigated = false;
+  bool _isLoading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _startLoading();
+    _runLoading();
   }
 
-  Future<void> _startLoading() async {
+  Future<void> _runLoading() async {
     try {
-      await widget.load(_reportProgress);
+      final result = await widget.load(_reportProgress);
 
       if (!mounted || _hasNavigated) return;
 
       _reportProgress(1);
       _hasNavigated = true;
+      _isLoading = false;
 
       await Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: widget.destinationBuilder),
+        MaterialPageRoute<void>(
+          builder: (context) => widget.destinationBuilder(context, result),
+        ),
       );
-    } catch (error, stackTrace) {
-      debugPrint('Persiapan aplikasi gagal: $error\n$stackTrace');
+    } catch (_) {
+      if (!mounted || _hasNavigated) return;
+
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
     }
   }
 
   void _reportProgress(double progress) {
-    if (!mounted || _hasNavigated) return;
+    if (!mounted || _hasNavigated || !_isLoading) return;
 
     setState(() {
       _progress = progress.clamp(0, 1).toDouble();
     });
   }
 
+  void _retry() {
+    if (_isLoading || _hasNavigated) return;
+
+    setState(() {
+      _progress = 0;
+      _hasError = false;
+      _isLoading = true;
+    });
+
+    _runLoading();
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_hasError) {
+      return _SplashError(onRetry: _retry);
+    }
+
     final percentage = (_progress * 100).round();
 
     return Scaffold(
@@ -69,6 +99,66 @@ class _SplashPageState extends State<SplashPage> {
           label: 'Memuat aplikasi $percentage%',
           value: '$percentage%',
           child: ExcludeSemantics(child: _LiquidLogo(progress: _progress)),
+        ),
+      ),
+    );
+  }
+}
+
+class _SplashError extends StatelessWidget {
+  const _SplashError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.primary,
+      body: SafeArea(
+        child: Center(
+          child: Semantics(
+            liveRegion: true,
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: Colors.white,
+                    size: 56,
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Aplikasi belum siap',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Terjadi masalah saat menyiapkan aplikasi. '
+                    'Periksa kembali lalu coba lagi.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.secondary,
+                      foregroundColor: AppColors.primary,
+                    ),
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Coba lagi'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
