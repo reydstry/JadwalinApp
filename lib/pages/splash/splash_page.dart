@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/app_bootstrapper.dart';
 import '../../theme/app_colors.dart';
+import 'widgets/splash_error.dart';
+import 'widgets/liquid_logo.dart';
 
 typedef SplashLoader = Future<AppBootstrapResult> Function(
   BootstrapProgressCallback onProgress,
@@ -27,8 +29,12 @@ class SplashPage extends StatefulWidget {
   State<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage> {
-  double _progress = 0;
+class _SplashPageState extends State<SplashPage>
+    with SingleTickerProviderStateMixin {
+  static const _minimumDisplayDuration = Duration(milliseconds: 1500);
+  late final AnimationController _progressController;
+  double _targetProgress = 0;
+  double get _progress => _progressController.value;
   bool _hasNavigated = false;
   bool _isLoading = true;
   bool _hasError = false;
@@ -36,7 +42,31 @@ class _SplashPageState extends State<SplashPage> {
   @override
   void initState() {
     super.initState();
+    _progressController = AnimationController(
+      vsync: this,
+      animationBehavior: AnimationBehavior.preserve,
+    )..addListener(() => setState(() {}));
     _runLoading();
+  }
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
+  }
+
+  TickerFuture _animateProgress(double target) {
+    _targetProgress = target;
+    // Limit reveal speed so moving from 0 to 1 takes at least 1.5 seconds.
+    final milliseconds = math.max(
+      250,
+      (_minimumDisplayDuration.inMilliseconds * (target - _progress)).ceil(),
+    );
+    return _progressController.animateTo(
+      target,
+      duration: Duration(milliseconds: milliseconds),
+      curve: Curves.linear,
+    );
   }
 
   Future<void> _runLoading() async {
@@ -45,7 +75,8 @@ class _SplashPageState extends State<SplashPage> {
 
       if (!mounted || _hasNavigated) return;
 
-      _reportProgress(1);
+      await _animateProgress(1).orCancel;
+      if (!mounted || _hasNavigated) return;
       _hasNavigated = true;
       _isLoading = false;
 
@@ -54,9 +85,13 @@ class _SplashPageState extends State<SplashPage> {
           builder: (context) => widget.destinationBuilder(context, result),
         ),
       );
+    } on TickerCanceled {
+      // The page was disposed before its reveal finished.
+      return;
     } catch (_) {
       if (!mounted || _hasNavigated) return;
 
+      _progressController.stop();
       setState(() {
         _isLoading = false;
         _hasError = true;
@@ -67,16 +102,17 @@ class _SplashPageState extends State<SplashPage> {
   void _reportProgress(double progress) {
     if (!mounted || _hasNavigated || !_isLoading) return;
 
-    setState(() {
-      _progress = progress.clamp(0, 1).toDouble();
-    });
+    // Reserve the full logo for a successfully completed loader.
+    final target = progress.clamp(0.0, 0.9).toDouble();
+    if (target > _targetProgress) _animateProgress(target);
   }
 
   void _retry() {
     if (_isLoading || _hasNavigated) return;
 
     setState(() {
-      _progress = 0;
+      _targetProgress = 0;
+      _progressController.reset();
       _hasError = false;
       _isLoading = true;
     });
@@ -87,195 +123,30 @@ class _SplashPageState extends State<SplashPage> {
   @override
   Widget build(BuildContext context) {
     if (_hasError) {
-      return _SplashError(onRetry: _retry);
+      return SplashError(onRetry: _retry);
     }
 
     final percentage = (_progress * 100).round();
 
     return Scaffold(
       backgroundColor: AppColors.primary,
-      body: Center(
-        child: Semantics(
-          label: 'Memuat aplikasi $percentage%',
-          value: '$percentage%',
-          child: ExcludeSemantics(child: _LiquidLogo(progress: _progress)),
-        ),
-      ),
-    );
-  }
-}
-
-class _SplashError extends StatelessWidget {
-  const _SplashError({required this.onRetry});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.primary,
-      body: SafeArea(
-        child: Center(
-          child: Semantics(
-            liveRegion: true,
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.error_outline_rounded,
-                    color: Colors.white,
-                    size: 56,
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Aplikasi belum siap',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Terjadi masalah saat menyiapkan aplikasi. '
-                    'Periksa kembali lalu coba lagi.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: onRetry,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.secondary,
-                      foregroundColor: AppColors.primary,
-                    ),
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Coba lagi'),
-                  ),
-                ],
+      body: Column(
+        children: [
+          const Spacer(),
+          Row(
+            children: [
+              const Spacer(),
+              Semantics(
+                label: 'Memuat aplikasi $percentage%',
+                value: '$percentage%',
+                child: ExcludeSemantics(child: LiquidLogo(progress: _progress)),
               ),
-            ),
+              const Spacer(),
+            ],
           ),
-        ),
+          const Spacer(),
+        ],
       ),
     );
-  }
-}
-
-class _LiquidLogo extends StatefulWidget {
-  const _LiquidLogo({required this.progress});
-
-  final double progress;
-
-  @override
-  State<_LiquidLogo> createState() => _LiquidLogoState();
-}
-
-class _LiquidLogoState extends State<_LiquidLogo>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _waveController;
-
-  @override
-  void initState() {
-    super.initState();
-    _waveController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _waveController.stop();
-    } else if (!_waveController.isAnimating) {
-      _waveController.repeat();
-    }
-  }
-
-  @override
-  void dispose() {
-    _waveController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const size = 201.0;
-
-    return SizedBox.square(
-      dimension: size,
-      child: ClipOval(
-        child: ColoredBox(
-          color: Colors.white,
-          child: AnimatedBuilder(
-            animation: _waveController,
-            builder: (context, child) {
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  CustomPaint(
-                    painter: _LiquidPainter(
-                      progress: widget.progress,
-                      phase: _waveController.value,
-                    ),
-                  ),
-                  Opacity(
-                    opacity: widget.progress,
-                    child: Image.asset(
-                      'assets/icon/app_icon.png',
-                      key: const ValueKey('splash-logo'),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LiquidPainter extends CustomPainter {
-  const _LiquidPainter({required this.progress, required this.phase});
-
-  final double progress;
-  final double phase;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (progress <= 0) return;
-
-    final surfaceY = size.height * (1 - progress);
-    final wavePath = Path()..moveTo(0, surfaceY);
-
-    for (var x = 0.0; x <= size.width; x += 2) {
-      final angle = ((x / size.width) * math.pi * 2) + (phase * math.pi * 2);
-      wavePath.lineTo(x, surfaceY + (math.sin(angle) * 5));
-    }
-
-    wavePath
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-
-    canvas.drawPath(
-      wavePath,
-      Paint()
-        ..color = const Color(0xFFFFD9BF)
-        ..style = PaintingStyle.fill,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _LiquidPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.phase != phase;
   }
 }

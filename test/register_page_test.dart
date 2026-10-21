@@ -197,6 +197,9 @@ void main() {
 }
 
 class _FakeAuthGateway implements AuthGateway {
+  @override
+  Future<void> logout() async {}
+
   _FakeAuthGateway({this.result});
 
   final Future<void>? result;
@@ -223,6 +226,9 @@ class _FakeAuthGateway implements AuthGateway {
 }
 
 class _FailOnceAuthGateway implements AuthGateway {
+  @override
+  Future<void> logout() async {}
+
   int registerCalls = 0;
 
   @override

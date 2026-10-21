@@ -10,17 +10,25 @@ import '../jadwal/kelola_jadwal.dart';
 
 import 'widgets/pilih_hari.dart';
 import 'widgets/list_jadwal.dart';
+import 'widgets/tambah_jadwal_button.dart';
+import 'widgets/home_header.dart';
+import 'widgets/home_day_summary.dart';
+import 'widgets/hapus_jadwal_dialog.dart';
 
 import '../../theme/app_colors.dart';
 
 class HomePage extends StatefulWidget {
   final AppDatabase database;
   final bool showOfflineEmptyState;
+  final Stream<List<JadwalDenganMataKuliah>> Function()? scheduleLoader;
+  final Future<void> Function()? onLogout;
 
   const HomePage({
     super.key,
     required this.database,
     this.showOfflineEmptyState = false,
+    this.scheduleLoader,
+    this.onLogout,
   });
 
   @override
@@ -57,7 +65,7 @@ class _HomePageState extends State<HomePage> {
   void _initRepository() {
     _repository = JadwalRepository(database: widget.database);
 
-    _jadwalStream = _repository.watchAll();
+    _jadwalStream = widget.scheduleLoader?.call() ?? _repository.watchAll();
   }
 
   @override
@@ -66,7 +74,8 @@ class _HomePageState extends State<HomePage> {
 
     // Jika instance database dari parent berubah,
     // perbarui repository dan stream.
-    if (oldWidget.database != widget.database) {
+    if (oldWidget.database != widget.database ||
+        oldWidget.scheduleLoader != widget.scheduleLoader) {
       _initRepository();
     }
   }
@@ -101,25 +110,7 @@ class _HomePageState extends State<HomePage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Hapus Jadwal'),
-          content: Text('Hapus jadwal ${data.mataKuliah.nama}?'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
-              child: const Text('Batal'),
-            ),
-
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
-              child: const Text('Hapus'),
-            ),
-          ],
-        );
+        return HapusJadwalDialog(namaMataKuliah: data.mataKuliah.nama);
       },
     );
 
@@ -158,76 +149,84 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void _retry() {
+    setState(_initRepository);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Jadwalin',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 24,
-            fontFamily: 'Poppins',
-            color: AppColors.primary,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.primary,
+        body: SafeArea(
+          child: StreamBuilder<List<JadwalDenganMataKuliah>>(
+            key: ObjectKey(_jadwalStream),
+            stream: _jadwalStream,
+            builder: (context, snapshot) {
+              final ready =
+                  snapshot.hasData &&
+                  !snapshot.hasError &&
+                  snapshot.connectionState != ConnectionState.waiting;
+              final schedules = ready
+                  ? snapshot.data!
+                  : <JadwalDenganMataKuliah>[];
+              final counts = <int, int>{};
+              for (final data in schedules) {
+                counts.update(
+                  data.jadwal.hari,
+                  (count) => count + 1,
+                  ifAbsent: () => 1,
+                );
+              }
+              final count = counts[_hariDipilih] ?? 0;
+              return Stack(
+                children: [
+                  Column(
+                    children: [
+                      HomeHeader(onLogout: widget.onLogout),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: PilihHari(
+                              selectedDay: _hariDipilih,
+                              onDaySelected: _pilihHari,
+                              scheduleCounts: counts,
+                            ),
+                          ),
+                        ],
+                      ),
+                      HomeDaySummary(
+                        dayName: DayHelper.dayNames[_hariDipilih] ?? '-',
+                        ready: ready,
+                        count: count,
+                      ),
+                      Expanded(
+                        child: ListJadwal(
+                          snapshot: snapshot,
+                          selectedDay: _hariDipilih,
+                          onAdd: _bukaTambahJadwal,
+                          onEdit: _bukaEditJadwal,
+                          onDelete: _hapusJadwal,
+                          onRetry: _retry,
+                          showOfflineEmptyState: widget.showOfflineEmptyState,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (ready && count > 0)
+                    Positioned(
+                      right: 19,
+                      bottom: 16,
+                      child: TambahJadwalButton(onPressed: _bukaTambahJadwal),
+                    ),
+                ],
+              );
+            },
           ),
         ),
-
-        actions: [
-          IconButton(
-            tooltip: 'Akun Saya',
-            onPressed: () {
-              // Hubungkan ke halaman akun
-              // setelah halaman akun tersedia.
-            },
-            icon: const Icon(
-              Icons.account_circle_outlined,
-              size: 30,
-              color: AppColors.primary,
-            ),
-          ),
-
-          const SizedBox(width: 12),
-        ],
-      ),
-
-      // KONTEN
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Navigasi hari yang sudah ada
-          PilihHari(selectedDay: _hariDipilih, onDaySelected: _pilihHari),
-
-          // Judul jadwal
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'Jadwal ${DayHelper.dayNames[_hariDipilih] ?? '-'}',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
-                height: 1.3,
-              ),
-            ),
-          ),
-
-          // Daftar jadwal dari database
-          Expanded(
-            child: ListJadwal(
-              stream: _jadwalStream,
-              selectedDay: _hariDipilih,
-              onAdd: _bukaTambahJadwal,
-              onEdit: _bukaEditJadwal,
-              onDelete: _hapusJadwal,
-              showOfflineEmptyState: widget.showOfflineEmptyState,
-            ),
-          ),
-        ],
-      ),
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: _bukaTambahJadwal,
-        child: const Icon(Icons.add),
       ),
     );
   }

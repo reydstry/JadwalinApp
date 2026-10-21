@@ -1,19 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../utils/day_helper.dart';
+import 'jadwal_form_style.dart';
+import 'jam_kuliah_field.dart';
 
 class WaktuKuliahForm extends StatelessWidget {
-  final int hari;
-  final ValueChanged<int> onHariChanged;
-
-  final TimeOfDay? jamMulai;
-  final TimeOfDay? jamSelesai;
-
-  final VoidCallback onPilihJamMulai;
-  final VoidCallback onPilihJamSelesai;
-
-  final TextEditingController ruanganController;
-
   const WaktuKuliahForm({
     super.key,
     required this.hari,
@@ -23,109 +14,104 @@ class WaktuKuliahForm extends StatelessWidget {
     required this.onPilihJamMulai,
     required this.onPilihJamSelesai,
     required this.ruanganController,
+    required this.stackTimes,
+    this.enabled = true,
   });
-
-  String _formatWaktu(TimeOfDay? time) {
-    if (time == null) {
-      return 'Pilih waktu';
-    }
-
-    final jam = time.hour.toString().padLeft(2, '0');
-    final menit = time.minute.toString().padLeft(2, '0');
-
-    return '$jam:$menit';
-  }
+  final int hari;
+  final ValueChanged<int> onHariChanged;
+  final TimeOfDay? jamMulai;
+  final TimeOfDay? jamSelesai;
+  final VoidCallback onPilihJamMulai;
+  final VoidCallback onPilihJamSelesai;
+  final TextEditingController ruanganController;
+  final bool enabled;
+  final bool stackTimes;
 
   @override
   Widget build(BuildContext context) {
+    final start = JamKuliahField(
+      label: 'Jam Mulai',
+      time: jamMulai,
+      onTap: enabled ? onPilihJamMulai : null,
+    );
+    final end = JamKuliahField(
+      label: 'Jam Selesai',
+      time: jamSelesai,
+      onTap: enabled ? onPilihJamSelesai : null,
+      validator: (value) {
+        if (value == null) return 'Jam selesai wajib dipilih';
+        if (jamMulai != null &&
+            value.hour * 60 + value.minute <=
+                jamMulai!.hour * 60 + jamMulai!.minute) {
+          return 'Harus setelah jam mulai';
+        }
+        return null;
+      },
+    );
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DropdownButtonFormField<int>(
-          initialValue: hari,
-          decoration: const InputDecoration(
-            labelText: 'Hari',
-            prefixIcon: Icon(Icons.calendar_today_outlined),
-            border: OutlineInputBorder(),
+        JadwalField(
+          label: 'Hari Kuliah',
+          child: DropdownButtonFormField<int>(
+            key: const Key('schedule_day'),
+            initialValue: hari,
+            isExpanded: true,
+            dropdownColor: Colors.white,
+            decoration: const InputDecoration(),
+            items: DayHelper.dayNames.entries
+                .map(
+                  (day) =>
+                      DropdownMenuItem(value: day.key, child: Text(day.value)),
+                )
+                .toList(),
+            onChanged: enabled
+                ? (value) {
+                    if (value != null) onHariChanged(value);
+                  }
+                : null,
           ),
-          items: DayHelper.dayNames.keys.map((day) {
-            return DropdownMenuItem<int>(
-              value: day,
-              child: Text(DayHelper.dayNames[day] ?? '-'),
-            );
-          }).toList(),
-          onChanged: (value) {
-            if (value != null) {
-              onHariChanged(value);
-            }
-          },
         ),
-
-        const SizedBox(height: 16),
-
-        Row(
-          children: [
-            Expanded(
-              child: _TimeField(
-                label: 'Jam Mulai',
-                value: _formatWaktu(jamMulai),
-                onTap: onPilihJamMulai,
+        const SizedBox(height: 14),
+        if (stackTimes)
+          Column(children: [start, const SizedBox(height: 14), end])
+        else
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                Expanded(child: Column(children: [start, const Spacer()])),
+                const SizedBox(width: 12),
+                Expanded(child: Column(children: [end, const Spacer()])),
+              ],
+            ),
+          ),
+        const SizedBox(height: 14),
+        JadwalField(
+          label: 'Ruangan',
+          child: TextFormField(
+            key: const Key('schedule_room'),
+            controller: ruanganController,
+            enabled: enabled,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              hintText: 'Contoh: G301',
+              prefixIcon: SizedBox.square(
+                dimension: 48,
+                child: Column(
+                  children: [
+                    Spacer(),
+                    Row(children: [Spacer(), JadwalFormIcon('room'), Spacer()]),
+                    Spacer(),
+                  ],
+                ),
               ),
             ),
-
-            const SizedBox(width: 12),
-
-            Expanded(
-              child: _TimeField(
-                label: 'Jam Selesai',
-                value: _formatWaktu(jamSelesai),
-                onTap: onPilihJamSelesai,
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 16),
-
-        TextFormField(
-          controller: ruanganController,
-          decoration: const InputDecoration(
-            labelText: 'Ruangan',
-            prefixIcon: Icon(Icons.location_on_outlined),
-            border: OutlineInputBorder(),
+            textInputAction: TextInputAction.done,
+            validator: (value) => value == null || value.trim().isEmpty
+                ? 'Ruangan wajib diisi'
+                : null,
           ),
-          textInputAction: TextInputAction.done,
         ),
       ],
-    );
-  }
-}
-
-// Widget internal untuk menampilkan pilihan jam.
-class _TimeField extends StatelessWidget {
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  const _TimeField({
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: const Icon(Icons.access_time),
-          border: const OutlineInputBorder(),
-        ),
-        child: Text(value),
-      ),
     );
   }
 }

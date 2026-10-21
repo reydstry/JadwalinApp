@@ -6,6 +6,8 @@ abstract interface class AuthGateway {
     required String email,
     required String password,
   });
+
+  Future<void> logout();
 }
 
 class SimulatedAuthGateway implements AuthGateway {
@@ -24,6 +26,12 @@ class SimulatedAuthGateway implements AuthGateway {
     required String email,
     required String password,
   }) async {
+    await Future<void>.delayed(delay);
+  }
+
+  @override
+  Future<void> logout() async {
+    // Penghapusan sesi/token akan dihubungkan saat integrasi backend.
     await Future<void>.delayed(delay);
   }
 }

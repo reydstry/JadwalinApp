@@ -207,8 +207,9 @@ class AppDatabase extends _$AppDatabase {
       ..where((t) {
         var kondisi =
             t.hari.equals(hari) &
-            t.jamMulai.isSmallerThanValue(jamSelesai) &
-            t.jamSelesai.isBiggerThanValue(jamMulai);
+            // An exact boundary leaves no one-minute gap between classes.
+            t.jamMulai.isSmallerOrEqualValue(jamSelesai) &
+            t.jamSelesai.isBiggerOrEqualValue(jamMulai);
 
         if (kecualiJadwalId != null) {
           kondisi = kondisi & t.id.equals(kecualiJadwalId).not();

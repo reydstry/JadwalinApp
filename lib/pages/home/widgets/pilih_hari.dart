@@ -1,71 +1,85 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
+import 'hari_bubble.dart';
 import '../../../utils/day_helper.dart';
 
-import '../../../theme/app_colors.dart';
-
-class PilihHari extends StatelessWidget {
-  final int selectedDay;
-  final ValueChanged<int> onDaySelected;
-
+class PilihHari extends StatefulWidget {
   const PilihHari({
     super.key,
     required this.selectedDay,
     required this.onDaySelected,
+    this.scheduleCounts = const {},
   });
+  final int selectedDay;
+  final ValueChanged<int> onDaySelected;
+  final Map<int, int> scheduleCounts;
+  @override
+  State<PilihHari> createState() => _PilihHariState();
+}
+
+class _PilihHariState extends State<PilihHari> {
+  final _dayKeys = {
+    for (final day in DayHelper.dayNames.keys) day: GlobalKey(),
+  };
+  @override
+  void initState() {
+    super.initState();
+    _revealSelectedDay();
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final days = DayHelper.dayNames.entries.toList();
-
-    return SizedBox(
-      height: 68,
-      child: ListView.separated(
-        padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
-        scrollDirection: Axis.horizontal,
-        itemCount: days.length,
-        separatorBuilder: (_, _) {
-          return const SizedBox(width: 8);
-        },
-        itemBuilder: (context, index) {
-          final day = days[index];
-
-          return ChoiceChip(
-            label: Text(
-              day.value,
-              style: TextStyle(
-                color: selectedDay == day.key ? AppColors.primary : Colors.grey.shade600,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-
-            selected: selectedDay == day.key,
-
-            // Warna latar
-            
-            selectedColor: AppColors.primary.withValues(alpha: 0.1),
-            backgroundColor: Colors.white,
-
-            // Warna dan ketebalan border
-            side: BorderSide(
-              color: selectedDay == day.key
-                  ? AppColors.primary.withValues(alpha: 0.2)
-                  : Colors.grey.shade300,
-              width: 1,
-            ),
-
-            // Bentuk kapsul
-            shape: const StadiumBorder(),
-
-            // Hilangkan tanda centang
-            showCheckmark: false,
-
-            onSelected: (_) {
-              onDaySelected(day.key);
-            },
-          );
-        },
-      ),
-    );
+  void didUpdateWidget(covariant PilihHari oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDay != widget.selectedDay ||
+        !mapEquals(oldWidget.scheduleCounts, widget.scheduleCounts)) {
+      _revealSelectedDay();
+    }
   }
+
+  void _revealSelectedDay() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final dayContext = _dayKeys[widget.selectedDay]?.currentContext;
+      if (dayContext != null) {
+        Scrollable.ensureVisible(dayContext, alignment: 0.5);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(width: 9),
+        Row(
+          children: [
+            for (final day in DayHelper.dayNames.entries)
+              Row(
+                key: _dayKeys[day.key],
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      HariBubble(
+                        day: day.key,
+                        label: day.value,
+                        count: widget.scheduleCounts[day.key] ?? 0,
+                        selected: widget.selectedDay == day.key,
+                        onPressed: () => widget.onDaySelected(day.key),
+                      ),
+                      SizedBox(width: 2),
+                    ],
+                  ),
+                ],
+              ),
+          ],
+        ),
+        SizedBox(width: 9),
+      ],
+    ),
+  );
 }

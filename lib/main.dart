@@ -59,6 +59,28 @@ class _MyAppState extends State<MyApp> {
         );
   }
 
+  Widget _buildAuthFlow(BuildContext context) =>
+      AuthFlow(authGateway: _authGateway, homeBuilder: _buildHome);
+
+  Widget _buildHome(
+    BuildContext context, {
+    bool showOfflineEmptyState = false,
+  }) => HomePage(
+    database: widget.database,
+    showOfflineEmptyState: showOfflineEmptyState,
+    onLogout: () => _logout(context),
+  );
+
+  Future<void> _logout(BuildContext context) async {
+    await _authGateway.logout();
+    if (!context.mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil<void>(
+      MaterialPageRoute<void>(builder: _buildAuthFlow),
+      (_) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -81,17 +103,12 @@ class _MyAppState extends State<MyApp> {
       home: SplashPage(
         load: _bootstrapper.load,
         destinationBuilder: (context, result) {
-          Widget buildHome(BuildContext context) => HomePage(
-            database: widget.database,
-            showOfflineEmptyState: result.showOfflineEmptyState,
-          );
-
           return switch (result.destination) {
-            AppLaunchDestination.login => AuthFlow(
-              authGateway: _authGateway,
-              homeBuilder: buildHome,
+            AppLaunchDestination.login => _buildAuthFlow(context),
+            AppLaunchDestination.home => _buildHome(
+              context,
+              showOfflineEmptyState: result.showOfflineEmptyState,
             ),
-            AppLaunchDestination.home => buildHome(context),
           };
         },
       ),

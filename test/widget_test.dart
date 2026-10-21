@@ -88,7 +88,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Loginkan Kawan!'), findsOneWidget);
+    expect(find.text('Loginkeun Kawan!'), findsOneWidget);
     expect(find.text('Jadwalin'), findsNothing);
 
     await database.close();
@@ -108,6 +108,9 @@ class _ImmediateBootstrapper implements AppBootstrapper {
 }
 
 class _FakeAuthGateway implements AuthGateway {
+  @override
+  Future<void> logout() async {}
+
   @override
   Future<void> login({required String email, required String password}) async {}
 
